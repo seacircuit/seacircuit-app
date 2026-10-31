@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#082630">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sea Circuit">
+<title>Sea Circuit</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+html,body{margin:0;height:100%;background:#082630;overflow:hidden}
+iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#082630}
+#sp{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#9FC3CB;font:600 16px Tahoma,sans-serif;transition:opacity .3s}
+#sp img{width:96px;height:96px;border-radius:22px}
+#sp.off{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="sp"><img src="icon-192.png" alt=""><span>Sea Circuit</span></div>
+<iframe id="app" title="Sea Circuit" allow="camera; geolocation; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<script>
+var APP='https://script.google.com/macros/s/AKfycbyvbWJH7zvMkehXFG4EcodN7yciSF-xt_7fF87KmshsECdUSLab8oNPZ8zaIfOiuP9Mlw/exec';
+var q=location.search||'';
+var f=document.getElementById('app');
+f.onload=function(){document.getElementById('sp').classList.add('off');};
+f.src=APP+q;
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}
+</script>
+</body>
+</html>
