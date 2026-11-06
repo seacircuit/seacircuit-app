@@ -19,11 +19,43 @@ iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#082630
 #sp{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#9FC3CB;font:600 16px Tahoma,sans-serif;transition:opacity .3s}
 #sp img{width:96px;height:96px;border-radius:22px}
 #sp.off{opacity:0;pointer-events:none}
+.hide{display:none!important}
+#bio{position:fixed;inset:0;z-index:5;background:#082630;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;font-family:Tahoma,sans-serif;text-align:center}
+#bio img{width:88px;height:88px;border-radius:20px}
+#bio b{font-size:22px}
+#bio .sub{color:#9FC3CB;font-size:14px;min-height:20px}
+#bio button,#ask button{font:700 17px Tahoma,sans-serif;border:0;border-radius:14px;min-height:54px;padding:0 22px;cursor:pointer}
+#bioGo{background:#2BC4D8;color:#082630;min-width:260px;display:flex;align-items:center;justify-content:center;gap:10px}
+#bioPin{background:transparent;color:#D7E8EC;text-decoration:underline;min-height:40px!important;font-size:15px!important}
+#bioOff{background:transparent;color:#7FA3AC;min-height:36px!important;font-size:12px!important;font-weight:400!important;position:absolute;bottom:calc(16px + env(safe-area-inset-bottom))}
+#ask{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#FFFFFF;color:#15181A;border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.25);padding:22px 20px calc(22px + env(safe-area-inset-bottom));font-family:Tahoma,sans-serif;display:flex;flex-direction:column;gap:12px}
+#ask b{font-size:18px}
+#ask p{margin:0;color:#4A5560;font-size:14px;line-height:1.7}
+#askYes{background:#082630;color:#fff}
+#askNo{background:#EEF2F3;color:#4A5560}
+@media (prefers-color-scheme: dark){#ask{background:#1B2A30;color:#EEF4F5}#ask p{color:#9FB5BC}#askNo{background:#24363D;color:#C9D8DC}}
 </style>
 </head>
 <body>
 <div id="sp"><img src="icon-192.png" alt=""><span>Sea Circuit</span></div>
 <iframe id="app" title="Sea Circuit" allow="camera; geolocation; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
+
+<div id="bio" class="hide" role="dialog" aria-label="الدخول السريع">
+  <img src="icon-192.png" alt="">
+  <b>Sea Circuit</b>
+  <div class="sub" id="bioMsg"></div>
+  <button id="bioGo" type="button"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11c0 3.5-1 6.5-2.5 8.5"/><path d="M8 11a4 4 0 0 1 8 0c0 2-.3 4-.9 5.8"/><path d="M5 12a7 7 0 0 1 14 0c0 1-.1 2-.2 3"/><path d="M12 15c-.2 2-.8 3.8-1.6 5.3"/></svg><span id="bioLbl"></span></button>
+  <button id="bioPin" type="button">الدخول بالرمز السري</button>
+  <button id="bioOff" type="button">إيقاف الدخول السريع على هذا الجهاز</button>
+</div>
+
+<div id="ask" class="hide" role="dialog" aria-label="تفعيل الدخول السريع">
+  <b id="askT"></b>
+  <p id="askP"></p>
+  <button id="askYes" type="button">تفعيل</button>
+  <button id="askNo" type="button">ليس الآن</button>
+</div>
+
 <script>
 var APP='https://script.google.com/macros/s/AKfycbyvbWJH7zvMkehXFG4EcodN7yciSF-xt_7fF87KmshsECdUSLab8oNPZ8zaIfOiuP9Mlw/exec';
 var q=location.search||'';
@@ -31,6 +63,62 @@ var f=document.getElementById('app');
 f.onload=function(){document.getElementById('sp').classList.add('off');};
 f.src=APP+q;
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}
+
+/* Quick unlock (Face ID / fingerprint) — device-local, PIN stays as fallback */
+(function(){
+  function $(i){return document.getElementById(i);}
+  function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){return null;}}
+  var IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  var VIA=IOS?'بـ Face ID':'بالبصمة';
+  var ok=!!(window.PublicKeyCredential&&navigator.credentials&&window.isSecureContext);
+  var src=null,srcOrigin='',pending=null,pendingLogin=null,busy=false;
+  function rec(){try{return JSON.parse(ls('SCB')||'null');}catch(e){return null;}}
+  function rnd(n){var a=new Uint8Array(n);crypto.getRandomValues(a);return a;}
+  function b64(buf){var s='',a=new Uint8Array(buf);for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);}
+  function unb64(s){var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}
+  function send(m){if(src&&srcOrigin){try{src.postMessage(m,srcOrigin);}catch(e){}}else pending=m;}
+  function hideBio(){$('bio').classList.add('hide');}
+  function showBio(msg){if(!ok||!rec())return;$('bioLbl').textContent='الدخول '+VIA;$('bioMsg').textContent=msg||'';$('bio').classList.remove('hide');}
+
+  function unlock(auto){var r=rec();if(!r||busy)return;busy=true;$('bioMsg').textContent='';
+    navigator.credentials.get({publicKey:{challenge:rnd(32),allowCredentials:[{type:'public-key',id:unb64(r.id),transports:['internal']}],userVerification:'required',timeout:60000}})
+    .then(function(c){busy=false;var fl=new Uint8Array(c.response.authenticatorData)[32];
+      if(!(fl&4)){$('bioMsg').textContent='لم يتم التحقق. حاول مرة أخرى.';return;}
+      hideBio();send({sc:'pin',pin:r.pin});})
+    .catch(function(e){busy=false;if(!auto)$('bioMsg').textContent='لم يكتمل التحقق. اضغط للمحاولة مرة أخرى، أو ادخل بالرمز السري.';});}
+
+  function enroll(){var L=pendingLogin;if(!L)return;$('ask').classList.add('hide');
+    navigator.credentials.create({publicKey:{challenge:rnd(32),rp:{name:'Sea Circuit'},
+      user:{id:rnd(16),name:L.owner?'owner':'staff',displayName:'Sea Circuit'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged'},timeout:60000,attestation:'none'}})
+    .then(function(c){ls('SCB',JSON.stringify({id:b64(c.rawId),pin:L.pin,owner:!!L.owner}));ls('SCB_NO',null);send({sc:'bioOn',name:VIA});})
+    .catch(function(){send({sc:'bioFail'});});}
+
+  function ask(L){if(!ok||L.kiosk||(Date.now()-(+ls('SCB_NO')||0))<7*864e5)return;
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function(a){if(!a)return;pendingLogin=L;
+      $('askT').textContent='الدخول '+VIA+'؟';
+      $('askP').textContent='افتح التطبيق '+(L.owner?'كمالك ':'')+VIA+' بدل كتابة الرمز في كل مرة. يعمل على هذا الجهاز فقط، ويبقى الرمز السري متاحاً دائماً.';
+      $('ask').classList.remove('hide');}).catch(function(){});}
+
+  window.addEventListener('message',function(e){var o=e.origin||'';
+    if(!/^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/.test(o)&&o!=='https://script.google.com')return;
+    var d=e.data;if(!d||typeof d!=='object'||!d.sc)return;
+    if(d.sc==='hello'){src=e.source;srcOrigin=o;if(pending){var p=pending;pending=null;send(p);}return;}
+    if(d.sc==='login'&&typeof d.pin==='string'){src=e.source;srcOrigin=o;hideBio();var r=rec();
+      if(!r)ask({pin:d.pin,owner:!!d.owner,kiosk:!!d.kiosk});return;}
+    if(d.sc==='bad'){ls('SCB',null);hideBio();return;}
+    if(d.sc==='logout'){showBio('');return;}
+  });
+
+  $('bioGo').onclick=function(){unlock(false);};
+  $('bioPin').onclick=hideBio;
+  $('bioOff').onclick=function(){ls('SCB',null);ls('SCB_NO',String(Date.now()));hideBio();};
+  $('askYes').onclick=enroll;
+  $('askNo').onclick=function(){ls('SCB_NO',String(Date.now()));$('ask').classList.add('hide');pendingLogin=null;};
+
+  if(ok&&rec()){showBio('');setTimeout(function(){unlock(true);},350);}
+})();
 </script>
 </body>
 </html>
