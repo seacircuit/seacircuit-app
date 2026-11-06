@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Sea Circuit">
 <title>Sea Circuit</title>
 <link rel="manifest" href="manifest.webmanifest">
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <link rel="icon" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
@@ -62,7 +63,9 @@ var q=location.search||'';
 var f=document.getElementById('app');
 f.onload=function(){document.getElementById('sp').classList.add('off');};
 f.src=APP+q;
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}
+window.OneSignalDeferred=window.OneSignalDeferred||[];
+OneSignalDeferred.push(async function(OneSignal){await OneSignal.init({appId:'87880de2-75ad-4fd8-aa0b-1506d57ddb42',safari_web_id:'web.onesignal.auto.336e9d4c-289f-452d-8560-a451da3453b9',
+  serviceWorkerPath:'seacircuit-app/OneSignalSDKWorker.js',serviceWorkerParam:{scope:'/seacircuit-app/'},notifyButton:{enable:false},autoResubscribe:true});});
 
 /* Quick unlock (Face ID / fingerprint) — device-local, PIN stays as fallback */
 (function(){
@@ -87,7 +90,7 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
       hideBio();send({sc:'pin',pin:r.pin});})
     .catch(function(e){busy=false;if(!auto)$('bioMsg').textContent='لم يكتمل التحقق. اضغط للمحاولة مرة أخرى، أو ادخل بالرمز السري.';});}
 
-  function enroll(){var L=pendingLogin;if(!L)return;$('ask').classList.add('hide');
+  function enroll(){var L=pendingLogin;if(!L)return;closeSheet();
     navigator.credentials.create({publicKey:{challenge:rnd(32),rp:{name:'Sea Circuit'},
       user:{id:rnd(16),name:L.owner?'owner':'staff',displayName:'Sea Circuit'},
       pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
@@ -95,27 +98,40 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
     .then(function(c){ls('SCB',JSON.stringify({id:b64(c.rawId),pin:L.pin,owner:!!L.owner}));ls('SCB_NO',null);send({sc:'bioOn',name:VIA});})
     .catch(function(){send({sc:'bioFail'});});}
 
-  function ask(L){if(!ok||L.kiosk||(Date.now()-(+ls('SCB_NO')||0))<7*864e5)return;
-    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function(a){if(!a)return;pendingLogin=L;
-      $('askT').textContent='الدخول '+VIA+'؟';
-      $('askP').textContent='افتح التطبيق '+(L.owner?'كمالك ':'')+VIA+' بدل كتابة الرمز في كل مرة. يعمل على هذا الجهاز فقط، ويبقى الرمز السري متاحاً دائماً.';
-      $('ask').classList.remove('hide');}).catch(function(){});}
-
+  var asking=null,queue=[];
+  function T(L,ar,en){return (!L||!L.lang||L.lang==='ar')?ar:en;}
+  function sheet(kind,L){if(asking){queue.push([kind,L]);return;}asking=kind;pendingLogin=L;
+    if(kind==='bio'){$('askT').textContent=T(L,'الدخول '+VIA+'؟',IOS?'Use Face ID?':'Use fingerprint?');
+      $('askP').textContent=T(L,'افتح التطبيق '+(L.owner?'كمالك ':'')+VIA+' بدل كتابة الرمز في كل مرة. يعمل على هذا الجهاز فقط، ويبقى الرمز السري متاحاً دائماً.','Open the app without typing your PIN. Works on this device only; your PIN still works.');}
+    else{$('askT').textContent=T(L,'تفعيل الإشعارات؟','Turn on notifications?');
+      $('askP').textContent=L.owner?'تصلك طلبات الموافقة والتنبيهات المهمة على الجوال فوراً، حتى والتطبيق مغلق.':T(L,'تصلك الإعلانات والتذكيرات من الإدارة فوراً، حتى والتطبيق مغلق.','Get announcements and reminders from the manager instantly, even when the app is closed.');}
+    $('askYes').textContent=T(L,'تفعيل','Turn on');$('askNo').textContent=T(L,'ليس الآن','Not now');$('ask').classList.remove('hide');}
+  function closeSheet(){$('ask').classList.add('hide');asking=null;pendingLogin=null;var n=queue.shift();if(n)setTimeout(function(){sheet(n[0],n[1]);},300);}
+  function snoozed(k){return (Date.now()-(+ls(k)||0))<7*864e5;}
+  function ask(L){if(!ok||L.kiosk||snoozed('SCB_NO'))return;
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function(a){if(a)sheet('bio',L);}).catch(function(){});}
+  var STANDALONE=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+  function pushLink(L){if(L.kiosk||!L.eid)return;
+    window.OneSignalDeferred=window.OneSignalDeferred||[];
+    OneSignalDeferred.push(async function(OS){try{await OS.login(L.eid);}catch(e){}
+      try{if(!('Notification' in window)||(IOS&&!STANDALONE))return;
+        if(Notification.permission==='default'&&!snoozed('SCP_NO'))sheet('push',L);}catch(e){}});}
   window.addEventListener('message',function(e){var o=e.origin||'';
     if(!/^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/.test(o)&&o!=='https://script.google.com')return;
     var d=e.data;if(!d||typeof d!=='object'||!d.sc)return;
     if(d.sc==='hello'){src=e.source;srcOrigin=o;if(pending){var p=pending;pending=null;send(p);}return;}
     if(d.sc==='login'&&typeof d.pin==='string'){src=e.source;srcOrigin=o;hideBio();var r=rec();
-      if(!r)ask({pin:d.pin,owner:!!d.owner,kiosk:!!d.kiosk});return;}
+      var L={pin:d.pin,owner:!!d.owner,kiosk:!!d.kiosk,eid:typeof d.eid==='string'?d.eid:'',lang:typeof d.lang==='string'?d.lang:'ar'};if(!r)ask(L);pushLink(L);return;}
     if(d.sc==='bad'){ls('SCB',null);hideBio();return;}
-    if(d.sc==='logout'){showBio('');return;}
+    if(d.sc==='logout'){showBio('');try{window.OneSignal&&OneSignal.logout&&OneSignal.logout();}catch(e){}return;}
   });
 
   $('bioGo').onclick=function(){unlock(false);};
   $('bioPin').onclick=hideBio;
   $('bioOff').onclick=function(){ls('SCB',null);ls('SCB_NO',String(Date.now()));hideBio();};
-  $('askYes').onclick=enroll;
-  $('askNo').onclick=function(){ls('SCB_NO',String(Date.now()));$('ask').classList.add('hide');pendingLogin=null;};
+  $('askYes').onclick=function(){if(asking==='bio')return enroll();var L=pendingLogin;closeSheet();
+    try{if(window.OneSignal&&OneSignal.Notifications){OneSignal.Notifications.requestPermission();}else{Notification.requestPermission();}}catch(e){}};
+  $('askNo').onclick=function(){ls(asking==='push'?'SCP_NO':'SCB_NO',String(Date.now()));closeSheet();};
 
   if(ok&&rec()){showBio('');setTimeout(function(){unlock(true);},350);}
 })();
